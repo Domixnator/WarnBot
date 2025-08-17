@@ -1,0 +1,123 @@
+import os
+import json
+import discord
+from discord import app_commands
+from discord.ext import commands
+from flask import Flask
+import threading
+
+# -----------------------------
+#  Flask webserver (Render URL / keep-alive)
+# -----------------------------
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "✅ A bot él és fut Renderen!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))  # Render ad PORT-ot
+    app.run(host="0.0.0.0", port=port)
+
+# -----------------------------
+#  Warnok tárolása
+# -----------------------------
+WARN_FILE = "warnings.json"
+
+if os.path.exists(WARN_FILE):
+    with open(WARN_FILE, "r", encoding="utf-8") as f:
+        warnings = json.load(f)
+else:
+    warnings = {}
+
+def save_warnings():
+    with open(WARN_FILE, "w", encoding="utf-8") as f:
+        json.dump(warnings, f, indent=4, ensure_ascii=False)
+
+# -----------------------------
+#  Discord bot (slash parancsok)
+# -----------------------------
+intents = discord.Intents.default()
+intents.members = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+ALLOWED_ROLES = ["Admin", "Moderátor"]
+
+def has_permission(interaction: discord.Interaction) -> bool:
+    roles = [r.name for r in interaction.user.roles]
+    return any(r in ALLOWED_ROLES for r in roles)
+
+@bot.event
+async def on_ready():
+    print(f"✅ Bejelentkezve mint {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"🔁 Sync kész: {len(synced)} parancs")
+    except Exception as e:
+        print(f"❌ Sync hiba: {e}")
+
+@bot.tree.command(name="warn", description="Figyelmeztet egy felhasználót")
+@app_commands.describe(member="Kit szeretnél warnolni?", reason="Miért kapja a warningot?")
+async def warn_slash(interaction: discord.Interaction, member: discord.Member, reason: str):
+    if not has_permission(interaction):
+        await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
+        return
+    user_id = str(member.id)
+    warnings.setdefault(user_id, [])
+    warnings[user_id].append({"reason": reason, "moderator": interaction.user.name})
+    save_warnings()
+    await interaction.response.send_message(
+        f"⚠️ {member.mention} figyelmeztetést kapott! Indok: **{reason}**"
+    )
+
+@bot.tree.command(name="warnlist", description="Warnok listázása")
+async def warnlist_slash(interaction: discord.Interaction):
+    if not has_permission(interaction):
+        await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
+        return
+    if not warnings:
+        await interaction.response.send_message("✅ Még senki nem kapott figyelmeztetést.", ephemeral=True)
+        return
+    embed = discord.Embed(title="⚠️ Warn lista", color=discord.Color.orange())
+    for user_id, warns in warnings.items():
+        try:
+            user = await bot.fetch_user(int(user_id))
+        except Exception:
+            continue
+        warn_text = "\n".join([f"- {w['reason']} *(adta: {w['moderator']})*" for w in warns])
+        embed.add_field(name=f"{user} – {len(warns)} warn", value=warn_text, inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="clearwarn", description="Felhasználó warnjainak törlése")
+@app_commands.describe(member="Kinek töröljük a warnokat?")
+async def clearwarn_slash(interaction: discord.Interaction, member: discord.Member):
+    if not has_permission(interaction):
+        await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
+        return
+    user_id = str(member.id)
+    if user_id in warnings:
+        warnings.pop(user_id)
+        save_warnings()
+        await interaction.response.send_message(f"✅ {member.mention} warnjai törölve.")
+    else:
+        await interaction.response.send_message(f"ℹ️ {member.mention} nem rendelkezik warnnal.", ephemeral=True)
+
+@bot.tree.command(name="help", description="Összes parancs listázása")
+async def help_slash(interaction: discord.Interaction):
+    if not has_permission(interaction):
+        await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
+        return
+    embed = discord.Embed(title="📜 Elérhető parancsok", color=discord.Color.blue())
+    for cmd in bot.tree.get_commands():
+        embed.add_field(name=f"/{cmd.name}", value=cmd.description or "Nincs leírás", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# -----------------------------
+#  Indítás
+# -----------------------------
+if __name__ == "__main__":
+    threading.Thread(target=run_web, daemon=True).start()
+    token = os.getenv("DISCORD_BOT_TOKEN")
+    if not token:
+        raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
+    bot.run(token)
