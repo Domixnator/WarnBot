@@ -41,7 +41,7 @@ intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-ALLOWED_ROLES = ["Admin", "Moderátor"]
+ALLOWED_ROLES = ["WarnStaff"]
 
 def has_permission(interaction: discord.Interaction) -> bool:
     roles = [r.name for r in interaction.user.roles]
@@ -121,3 +121,4 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
