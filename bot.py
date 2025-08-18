@@ -7,6 +7,19 @@ from flask import Flask
 import threading
 import itertools
 
+# Konfiguráció: ide írd be a log csatorna ID-ját
+LOG_CHANNEL_ID = 1302415427070201985  # <-- Ezt cseréld ki a te log csatorna ID-ra
+
+
+async def log_action(bot, message: str):
+    """Log üzenet küldése a megadott csatornába"""
+    if LOG_CHANNEL_ID:
+        channel = bot.get_channel(LOG_CHANNEL_ID)
+        if channel:
+            await channel.send(message)
+
+
+
 # -----------------------------
 #  Flask webserver (Render URL / keep-alive)
 # -----------------------------
@@ -82,9 +95,12 @@ async def warn_slash(interaction: discord.Interaction, member: discord.Member, r
     save_warnings()
 
     await interaction.response.send_message(
-        f"⚠️ {member.mention} figyelmeztetést kapott! "
-        f"Indok: **{reason}** | ID: `{warn_id}`"
+        f"⚠️ {member.mention} figyelmeztetést kapott! Indok: **{reason}** | ID: `{warn_id}`"
     )
+    # LOG
+    await log_action(bot, f"⚠️ **WARN** | {member} (ID: {member.id}) kapott egy figyelmeztetést.\n"
+                          f"Indok: {reason}\nModerator: {interaction.user} | Warn ID: `{warn_id}`")
+
 
 @bot.tree.command(name="warnlist", description="Warnok listázása")
 async def warnlist_slash(interaction: discord.Interaction):
@@ -115,14 +131,16 @@ async def clearwarnid_slash(interaction: discord.Interaction, warn_id: int):
 
     found = False
     for user_id, warns in list(warnings.items()):
-        for w in list(warns):  # másolaton iterálunk, hogy lehessen törölni
-            # összehasonlítás int-ként
+        for w in list(warns):
             if int(w.get("id", -1)) == warn_id:
                 warns.remove(w)
-                if not warns:  # ha a lista üres marad, töröljük a user-t is
+                if not warns:
                     warnings.pop(user_id)
                 save_warnings()
                 await interaction.response.send_message(f"✅ Warn ID `{warn_id}` törölve.")
+                # LOG
+                await log_action(bot, f"🗑 **CLEAR WARN** | Warn ID `{warn_id}` törölve.\n"
+                                      f"Moderator: {interaction.user}")
                 found = True
                 break
         if found:
@@ -130,6 +148,7 @@ async def clearwarnid_slash(interaction: discord.Interaction, warn_id: int):
 
     if not found:
         await interaction.response.send_message(f"⚠️ Nem található warn ID `{warn_id}`.")
+
 
         
 @bot.tree.command(name="help", description="Összes parancs listázása")
@@ -151,6 +170,7 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
 
 
 
