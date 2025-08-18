@@ -6,6 +6,8 @@ from discord.ext import commands
 from flask import Flask
 import threading
 import itertools
+import datetime
+
 
 # Konfiguráció: ide írd be a log csatorna ID-ját
 LOG_CHANNEL_ID = 1302415427070201985  # <-- Ezt cseréld ki a te log csatorna ID-ra
@@ -91,8 +93,13 @@ async def warn_slash(interaction: discord.Interaction, member: discord.Member, r
     user_id = str(member.id)
     warnings.setdefault(user_id, [])
     warn_id = next(warn_id_counter)  # Új ID generálása
-    warnings[user_id].append({"id": warn_id, "reason": reason, "moderator": interaction.user.name})
-    save_warnings()
+warnings[user_id].append({
+    "id": warn_id,
+    "reason": reason,
+    "moderator": interaction.user.name,
+    "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+})
+save_warnings()
 
     await interaction.response.send_message(
         f"⚠️ {member.mention} figyelmeztetést kapott! Indok: **{reason}** | ID: `{warn_id}`"
@@ -118,7 +125,9 @@ async def warnlist_slash(interaction: discord.Interaction):
             user = await bot.fetch_user(int(user_id))
         except Exception:
             continue
-        warn_text = "\n".join([f"ID: `{w['id']}` – {w['reason']} *(adta: {w['moderator']})*" for w in warns])
+        warn_text = "\n".join([
+    f"ID: `{w['id']}` – {w['reason']} *(adta: {w['moderator']} | {w.get('date', 'nincs dátum')})*"
+    for w in warns])
         embed.add_field(name=f"{user} – {len(warns)} warn", value=warn_text, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -170,6 +179,7 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
 
 
 
