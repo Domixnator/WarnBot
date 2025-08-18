@@ -115,10 +115,11 @@ async def clearwarnid_slash(interaction: discord.Interaction, warn_id: int):
 
     found = False
     for user_id, warns in list(warnings.items()):
-        for w in warns:
-            if w.get("id") == warn_id:
+        for w in list(warns):  # másolaton iterálunk, hogy lehessen törölni
+            # összehasonlítás int-ként
+            if int(w.get("id", -1)) == warn_id:
                 warns.remove(w)
-                if not warns:  # ha üres marad
+                if not warns:  # ha a lista üres marad, töröljük a user-t is
                     warnings.pop(user_id)
                 save_warnings()
                 await interaction.response.send_message(f"✅ Warn ID `{warn_id}` törölve.")
@@ -129,6 +130,7 @@ async def clearwarnid_slash(interaction: discord.Interaction, warn_id: int):
 
     if not found:
         await interaction.response.send_message(f"⚠️ Nem található warn ID `{warn_id}`.")
+
         
 @bot.tree.command(name="help", description="Összes parancs listázása")
 async def help_slash(interaction: discord.Interaction):
@@ -149,5 +151,6 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
 
 
