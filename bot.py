@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 from flask import Flask
 import threading
+import itertools
 
 # -----------------------------
 #  Flask webserver (Render URL / keep-alive)
@@ -34,6 +35,17 @@ def save_warnings():
     with open(WARN_FILE, "w", encoding="utf-8") as f:
         json.dump(warnings, f, indent=4, ensure_ascii=False)
 
+# Globális counter az ID-khoz
+if warnings:
+    # ha már vannak warnok, nézd meg a legnagyobb ID-t
+    max_id = max(
+        (w.get("id", 0) for user_warns in warnings.values() for w in user_warns),
+        default=0
+    )
+else:
+    max_id = 0
+warn_id_counter = itertools.count(max_id + 1)
+
 # -----------------------------
 #  Discord bot (slash parancsok)
 # -----------------------------
@@ -62,12 +74,16 @@ async def warn_slash(interaction: discord.Interaction, member: discord.Member, r
     if not has_permission(interaction):
         await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
         return
+
     user_id = str(member.id)
     warnings.setdefault(user_id, [])
-    warnings[user_id].append({"reason": reason, "moderator": interaction.user.name})
+    warn_id = next(warn_id_counter)  # Új ID generálása
+    warnings[user_id].append({"id": warn_id, "reason": reason, "moderator": interaction.user.name})
     save_warnings()
+
     await interaction.response.send_message(
-        f"⚠️ {member.mention} figyelmeztetést kapott! Indok: **{reason}**"
+        f"⚠️ {member.mention} figyelmeztetést kapott! "
+        f"Indok: **{reason}** | ID: `{warn_id}`"
     )
 
 @bot.tree.command(name="warnlist", description="Warnok listázása")
@@ -75,33 +91,45 @@ async def warnlist_slash(interaction: discord.Interaction):
     if not has_permission(interaction):
         await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
         return
+
     if not warnings:
         await interaction.response.send_message("✅ Még senki nem kapott figyelmeztetést.", ephemeral=True)
         return
+
     embed = discord.Embed(title="⚠️ Warn lista", color=discord.Color.orange())
     for user_id, warns in warnings.items():
         try:
             user = await bot.fetch_user(int(user_id))
         except Exception:
             continue
-        warn_text = "\n".join([f"- {w['reason']} *(adta: {w['moderator']})*" for w in warns])
+        warn_text = "\n".join([f"ID: `{w['id']}` – {w['reason']} *(adta: {w['moderator']})*" for w in warns])
         embed.add_field(name=f"{user} – {len(warns)} warn", value=warn_text, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="clearwarn", description="Felhasználó warnjainak törlése")
-@app_commands.describe(member="Kinek töröljük a warnokat?")
-async def clearwarn_slash(interaction: discord.Interaction, member: discord.Member):
+@bot.tree.command(name="clearwarnid", description="Egy adott warn törlése ID alapján")
+@app_commands.describe(warn_id="Melyik warn ID-t töröljük?")
+async def clearwarnid_slash(interaction: discord.Interaction, warn_id: int):
     if not has_permission(interaction):
         await interaction.response.send_message("⛔ Nincs jogod ehhez!", ephemeral=True)
         return
-    user_id = str(member.id)
-    if user_id in warnings:
-        warnings.pop(user_id)
-        save_warnings()
-        await interaction.response.send_message(f"✅ {member.mention} warnjai törölve.")
-    else:
-        await interaction.response.send_message(f"ℹ️ {member.mention} nem rendelkezik warnnal.", ephemeral=True)
 
+    found = False
+    for user_id, warns in list(warnings.items()):
+        for w in warns:
+            if w.get("id") == warn_id:
+                warns.remove(w)
+                if not warns:  # ha üres marad
+                    warnings.pop(user_id)
+                save_warnings()
+                await interaction.response.send_message(f"✅ Warn ID `{warn_id}` törölve.")
+                found = True
+                break
+        if found:
+            break
+
+    if not found:
+        await interaction.response.send_message(f"⚠️ Nem található warn ID `{warn_id}`.")
+        
 @bot.tree.command(name="help", description="Összes parancs listázása")
 async def help_slash(interaction: discord.Interaction):
     if not has_permission(interaction):
@@ -121,4 +149,5 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
 
