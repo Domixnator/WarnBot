@@ -48,7 +48,7 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 ALLOWED_ROLES = ["WarnStaff"]  # Csak ezek a rangok használhatják
-LOG_CHANNEL_ID = 123456789012345678  # <-- Ide írd a log csatorna ID-ját
+LOG_CHANNEL_ID = 1302415427070201985  # <-- Ide írd a log csatorna ID-ját
 
 def has_permission(interaction: discord.Interaction) -> bool:
     roles = [r.name for r in interaction.user.roles]
@@ -182,3 +182,4 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
