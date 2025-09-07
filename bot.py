@@ -173,6 +173,14 @@ async def help_slash(interaction: discord.Interaction):
         embed.add_field(name=f"/{cmd.name}", value=cmd.description or "Nincs leírás", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@bot.tree.command(name="test", description="Teszteld, hogy a bot működik-e")
+async def test_slash(interaction: discord.Interaction):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    await interaction.response.send_message(
+        f"✅ A bot él és fut!\n⏰ Idő: {now}\n🤖 Bot: {bot.user}", 
+        ephemeral=True
+    )
+
 # -----------------------------
 #  Indítás
 # -----------------------------
@@ -182,4 +190,5 @@ if __name__ == "__main__":
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
     bot.run(token)
+
 
