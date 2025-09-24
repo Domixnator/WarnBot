@@ -7,6 +7,7 @@ from flask import Flask
 import threading
 import datetime
 import itertools
+import asyncio
 
 # -----------------------------
 #  Flask webserver (Render URL / keep-alive)
@@ -182,13 +183,20 @@ async def test_slash(interaction: discord.Interaction):
     )
 
 # -----------------------------
-#  Indítás
+#  Indítás auto-restarttal
 # -----------------------------
 if __name__ == "__main__":
     threading.Thread(target=run_web, daemon=True).start()
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik (Render env var)!")
-    bot.run(token)
+    
+    while True:
+        try:
+            bot.run(token)
+        except Exception as e:
+            print(f"❌ Bot hiba: {e}, újraindítás 10 mp múlva...")
+            time.sleep(10)
+
 
 
